@@ -1,0 +1,7 @@
+Mac OS / Linux
+source mypython/bin/activate
+Windows
+mypthon\Scripts\activate
+
+
+pip freeze > requirements.txt
