@@ -1,40 +1,44 @@
 # dependencies
+from statistics import median
 from flask import Flask, request, jsonify, make_response
 from joblib import load
 import numpy as np
+from flask_cors import CORS
 
 
 from flask_json_schema import JsonSchema, JsonValidationError
 from flask import Response
 
 app = Flask(__name__)
+CORS(app)
 schema = JsonSchema(app)
 
-x_columns = ['account_length',
-             'intertiol_plan',
-             'voice_mail_plan',
-             'number_vm_messages',
-             'total_day_min',
-             'total_day_calls',
-             'total_day_charge',
-             'total_eve_min',
-             'total_eve_calls',
-             'total_eve_charge',
-             'total_night_minutes',
-             'total_night_calls',
-             'total_night_charge',
-             'total_intl_minutes',
-             'total_intl_calls',
-             'total_intl_charge',
-             'customer_service_calls',
-             "445.0",
-             "452.0",
-             "547.0",
-             'total_charge',
-             'total_calls',
-             'total_min',
-             'no_of_plans',
-             'avg_call_mins']
+
+x_columns = {'account_length': {"min": 0, "max": 250, "median": 101.0},
+             'intertiol_plan': False,
+             'voice_mail_plan': False,
+             'number_vm_messages': {"min": 0, "max": 51, "median": 0},
+             'total_day_min': {"min": 0, "max": 500, "median": 182.10},
+             'total_day_calls': {"min": 0, "max": 800, "median": 101},
+             'total_day_charge': {"min": 0, "max": 61, "median": 30.91},
+             'total_eve_min': {"min": 0, "max": 800, "median": 202.90},
+             'total_eve_calls': {"min": 0, "max": 170, "median": 100},
+             'total_eve_charge': {"min": 0, "max": 31, "median": 17.26},
+             'total_night_minutes': {"min": 0, "max": 800, "median": 202.0},
+             'total_night_calls': {"min": 0, "max": 175, "median": 100},
+             'total_night_charge': {"min": 0, "max": 200, "median": 9.09},
+             'total_intl_minutes': {"min": 0, "max": 25, "median": 10.30},
+             'total_intl_calls': {"min": 0, "max": 20, "median": 4},
+             'total_intl_charge': {"min": 0, "max": 10, "median": 2.78},
+             'customer_service_calls': {"min": 0, "max": 10, "median": 1},
+             "445.0": False,
+             "452.0": False,
+             "547.0": False,
+             'total_charge': False,
+             'total_calls': False,
+             'total_min': False,
+             'no_of_plans': False,
+             'avg_call_mins': False}
 
 required = [
     'account_length',
@@ -53,17 +57,35 @@ required = [
     'total_intl_minutes',
     'total_intl_calls',
     'total_intl_charge',
-    'customer_service_calls'
+    'customer_service_calls',
+    'location_code'
 ]
 
 
 def preprocess_data(data):
-    if("445.0" not in data):
-        data["445.0"] = 0
-    if("452.0" not in data):
+    loc_code = data["location_code"]
+    if(loc_code == "445"):
+        data["445.0"] = 1
         data["452.0"] = 0
-    if ("547.0" not in data):
         data["547.0"] = 0
+    elif(loc_code == "452"):
+        data["445.0"] = 0
+        data["452.0"] = 1
+        data["547.0"] = 0
+    elif(loc_code == "547"):
+        data["445.0"] = 0
+        data["452.0"] = 0
+        data["547.0"] = 1
+
+    if data["intertiol_plan"] == "Yes":
+        data["intertiol_plan"] = 1
+    elif data["intertiol_plan"] == "No":
+        data["intertiol_plan"] = 0
+
+    if data["voice_mail_plan"] == "Yes":
+        data["voice_mail_plan"] = 1
+    elif data["voice_mail_plan"] == "No":
+        data["voice_mail_plan"] = 0
 
     data["total_charge"] = data["total_intl_charge"] + data["total_night_charge"] + \
         data["total_eve_charge"] + data["total_day_charge"]
@@ -75,7 +97,16 @@ def preprocess_data(data):
     data["no_of_plans"] = data['intertiol_plan'] + data['voice_mail_plan']
     data["avg_call_mins"] = data["total_min"] / data["total_calls"]
 
-    return data
+    values = []
+    for feature in x_columns.keys():
+        column_values = x_columns[feature]
+        if column_values and (data[feature] > column_values["max"] or data[feature] < column_values["min"]):
+            print("Invalid value for feature: {}".format(feature))
+            data[feature] = column_values["median"]
+
+        values.append(data[feature])
+
+    return values
 
 
 @app.errorhandler(JsonValidationError)
@@ -92,7 +123,7 @@ def hello():
     }), 200)
 
 
-todo_schema = {
+predict_schema = {
     'required': required,
     'properties': {
         # 'todo': {'type': 'string'},
@@ -102,25 +133,17 @@ todo_schema = {
 
 
 @app.route('/api/v1/predict', methods=['POST'])
-@schema.validate(todo_schema)
+@schema.validate(predict_schema)
 def predict():
+    print("started")
     try:
+        # print("x-")
         model = load('model.joblib')
         data = request.get_json()
-        # print(data)
 
-        values = []
+        # print("pre-processing")
+        values = preprocess_data(data)
 
-        pre_proc_data = preprocess_data(data)
-        # print("pre processed data :", pre_proc_data)
-
-        for feature in x_columns:
-            if feature not in pre_proc_data:
-                return make_response(jsonify({
-                    'message': 'Missing feature :'+str(feature)
-                }), 400)
-
-            values.append(pre_proc_data[feature])
         print(values)
         final_data = [np.array(values)]
         prediction = model.predict(final_data)
