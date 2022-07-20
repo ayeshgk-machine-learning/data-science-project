@@ -4,12 +4,13 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.model_selection import train_test_split
 
 # from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
+# from sklearn.ensemble import RandomForestClassifier
 # from sklearn.svm import SVC
 # from xgboost import XGBClassifier
 # from sklearn.ensemble import GradientBoostingClassifier
 
 from joblib import dump, load
+import lightgbm as lg
 
 
 def one_hot_encoding(df, feature):
@@ -97,7 +98,15 @@ y = df_train['Churn']
 
 x_train, x_test, y_train, y_test = train_test_split(
     x, y, test_size=0.3, random_state=42)
-rf = RandomForestClassifier(random_state=1, n_estimators=400)
-rf.fit(x_train, y_train)
+# rf = RandomForestClassifier(random_state=1, n_estimators=400)
+lgbm_model = lg.LGBMClassifier(
+    random_state=0,
+    n_estimators=435,
+    num_leaves=35,
+    max_depth=8,
+    verbose=-1
+)
+lgbm_model.fit(x_train, y_train)
 
-dump(rf, 'model.joblib')
+dump(lgbm_model, 'model.joblib')
+print("model created.")

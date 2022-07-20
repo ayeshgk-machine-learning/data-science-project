@@ -4,6 +4,7 @@ from flask import Flask, request, jsonify, make_response
 from joblib import load
 import numpy as np
 from flask_cors import CORS
+import pandas as pd
 
 
 from flask_json_schema import JsonSchema, JsonValidationError
@@ -156,6 +157,30 @@ def predict():
         return make_response(jsonify({
             'message': str(e)
         }), 500)
+
+
+@app.route('/api/v1/customer', methods=['POST'])
+def customer():
+    try:
+        data = request.get_json()
+        # print(data)
+        customer_id = data['customer_id']
+        if(customer_id < 1000 or customer_id > 2319):
+            return make_response(jsonify({
+                'message': 'Invalid customer id'
+            }), 400)
+
+        df = pd.read_csv('web.csv')
+        customer = df[df['customer_id'] == 1001].to_dict(orient='index')[0]
+        # print(customer)
+    except Exception as e:
+        return make_response(jsonify({
+            'message': str(e)
+        }), 500)
+    return make_response(jsonify({
+        'message': 'Customer found',
+        'data': customer
+    }), 200)
 
 
 if __name__ == "__main__":
