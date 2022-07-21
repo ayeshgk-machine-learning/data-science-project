@@ -43,8 +43,6 @@ x_columns = {'account_length': {"min": 0, "max": 250, "median": 101.0},
 
 required = [
     'account_length',
-    'intertiol_plan',
-    'voice_mail_plan',
     'number_vm_messages',
     'total_day_min',
     'total_day_calls',
@@ -59,7 +57,7 @@ required = [
     'total_intl_calls',
     'total_intl_charge',
     'customer_service_calls',
-    'location_code'
+
 ]
 
 
@@ -77,17 +75,40 @@ def preprocess_data(data):
         data["445.0"] = 0
         data["452.0"] = 0
         data["547.0"] = 1
+    else:
+        print("location code fixed by mode")
+        data["445.0"] = 0
+        data["452.0"] = 1
+        data["547.0"] = 0
 
     if data["intertiol_plan"] == "Yes":
         data["intertiol_plan"] = 1
     elif data["intertiol_plan"] == "No":
+        data["intertiol_plan"] = 0
+    else:
+        print("intertiol_plan fixed by mode")
         data["intertiol_plan"] = 0
 
     if data["voice_mail_plan"] == "Yes":
         data["voice_mail_plan"] = 1
     elif data["voice_mail_plan"] == "No":
         data["voice_mail_plan"] = 0
+    else:
+        print("voice_mail_plan fixed by mode")
+        data["voice_mail_plan"] = 0
 
+    print("categorical preprocessing done...!")
+    # fixing numerical data values
+    for feature in required:
+        # print("fixing feature: ", feature)
+        column_values = x_columns[feature]
+
+        if column_values and (data[feature] == None or data[feature] == "" or data[feature] > column_values["max"] or data[feature] < column_values["min"]):
+            print("Invalid value for feature: {}".format(feature))
+            data[feature] = column_values["median"]
+
+    print("numerical preprocessing done...!")
+    # creating new featurs from existing ones
     data["total_charge"] = data["total_intl_charge"] + data["total_night_charge"] + \
         data["total_eve_charge"] + data["total_day_charge"]
     data["total_calls"] = data["total_intl_calls"] + data["total_night_calls"] + \
@@ -98,15 +119,14 @@ def preprocess_data(data):
     data["no_of_plans"] = data['intertiol_plan'] + data['voice_mail_plan']
     data["avg_call_mins"] = data["total_min"] / data["total_calls"]
 
+    print("new features created...!")
+    print("preprocessing done...! data", data)
+    # filter need values
     values = []
     for feature in x_columns.keys():
-        column_values = x_columns[feature]
-        if column_values and (data[feature] > column_values["max"] or data[feature] < column_values["min"]):
-            print("Invalid value for feature: {}".format(feature))
-            data[feature] = column_values["median"]
-
         values.append(data[feature])
 
+    # print("values", values)
     return values
 
 
@@ -124,17 +144,17 @@ def hello():
     }), 200)
 
 
-predict_schema = {
-    'required': required,
-    'properties': {
-        # 'todo': {'type': 'string'},
-        # 'priority': {'type': 'integer'},
-    }
-}
+# predict_schema = {
+#     'required': required,
+#     'properties': {
+#         # 'todo': {'type': 'string'},
+#         # 'priority': {'type': 'integer'},
+#     }
+# }
 
 
 @app.route('/api/v1/predict', methods=['POST'])
-@schema.validate(predict_schema)
+# @schema.validate(predict_schema)
 def predict():
     print("started")
     try:
@@ -142,10 +162,10 @@ def predict():
         model = load('model.joblib')
         data = request.get_json()
 
-        # print("pre-processing")
+        print("pre-processing")
         values = preprocess_data(data)
 
-        print(values)
+        # print(values)
         final_data = [np.array(values)]
         prediction = model.predict(final_data)
         # prediction = 'lept'
@@ -154,6 +174,7 @@ def predict():
             'prediction': str(prediction[0])
         }), 200)
     except Exception as e:
+        print("error", e)
         return make_response(jsonify({
             'message': str(e)
         }), 500)
@@ -163,17 +184,18 @@ def predict():
 def customer():
     try:
         data = request.get_json()
-        # print(data)
+        print(data)
         customer_id = data['customer_id']
-        if(customer_id < 1000 or customer_id > 2319):
+        if(customer_id < 1001 or customer_id > 3321):
             return make_response(jsonify({
                 'message': 'Invalid customer id'
             }), 400)
 
         df = pd.read_csv('web.csv')
-        customer = df[df['customer_id'] == 1001].to_dict(orient='index')[0]
+        customer = df[df['customer_id'] == customer_id].squeeze().to_dict()
         # print(customer)
     except Exception as e:
+        print("error :", e)
         return make_response(jsonify({
             'message': str(e)
         }), 500)
